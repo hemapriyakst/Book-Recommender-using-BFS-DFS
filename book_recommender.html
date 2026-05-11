@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Library Book Recommender</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0d0d0f;
+  --surface:#141417;
+  --surface2:#1c1c21;
+  --border:#2a2a32;
+  --accent:#c9a84c;
+  --accent2:#e8c97a;
+  --text:#e8e6df;
+  --muted:#7a7870;
+  --green:#4caf7d;
+  --amber:#e8a94c;
+  --red:#e87c4c;
+  --visited-node:#c9a84c;
+  --current-node:#e87c4c;
+  --source-node:#4caf7d;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* noise texture overlay */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;opacity:.4;
+}
+
+.wrap{max-width:1100px;margin:0 auto;padding:40px 24px;position:relative;z-index:1}
+
+/* Header */
+header{margin-bottom:40px;display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.logo{display:flex;flex-direction:column}
+.logo-eyebrow{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:6px;font-weight:500}
+.logo-title{font-family:'Playfair Display',serif;font-size:clamp(28px,5vw,48px);font-weight:700;line-height:1;color:var(--text)}
+.logo-title em{font-style:italic;color:var(--accent)}
+.algo-pill{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:4px;gap:4px}
+.algo-pill button{padding:8px 22px;border-radius:100px;border:none;background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+.algo-pill button.active{background:var(--accent);color:#0d0d0f}
+
+/* Search */
+.search-bar{display:flex;gap:12px;margin-bottom:36px;align-items:stretch}
+.search-wrap{flex:1;position:relative}
+.search-wrap input{
+  width:100%;padding:14px 20px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;
+  transition:border-color .2s;outline:none
+}
+.search-wrap input:focus{border-color:var(--accent)}
+.search-wrap input::placeholder{color:var(--muted)}
+#suggestions{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;
+  background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;z-index:50;display:none;box-shadow:0 16px 48px rgba(0,0,0,.5)
+}
+.sug-item{padding:12px 18px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:background .15s}
+.sug-item:hover{background:var(--border)}
+.sug-thumb{width:36px;height:50px;object-fit:cover;border-radius:4px;background:var(--border);flex-shrink:0}
+.sug-info{min-width:0}
+.sug-title{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sug-author{font-size:12px;color:var(--muted)}
+.find-btn{
+  padding:14px 32px;background:var(--accent);color:#0d0d0f;
+  font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;
+  border:none;border-radius:12px;cursor:pointer;white-space:nowrap;
+  transition:background .2s,transform .1s
+}
+.find-btn:hover{background:var(--accent2)}
+.find-btn:active{transform:scale(.98)}
+
+/* Status bar */
+.status{font-size:12px;color:var(--muted);margin-bottom:20px;min-height:18px;font-style:italic}
+
+/* Main grid */
+.main{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:700px){.main{grid-template-columns:1fr}}
+
+/* Panel */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.panel-head{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-label{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.panel-badge{font-size:11px;color:var(--accent);font-weight:500}
+
+/* Graph canvas */
+#graph-canvas{display:block;width:100%;height:360px;background:var(--surface)}
+
+/* Legend */
+.legend{padding:10px 20px;border-top:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+
+/* Results */
+.results-scroll{height:360px;overflow-y:auto;padding:12px}
+.results-scroll::-webkit-scrollbar{width:4px}
+.results-scroll::-webkit-scrollbar-track{background:transparent}
+.results-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+.result-card{
+  display:flex;gap:14px;align-items:flex-start;
+  padding:14px;border-radius:12px;border:1px solid var(--border);
+  background:var(--surface2);margin-bottom:10px;
+  opacity:0;transform:translateX(12px);transition:opacity .35s,transform .35s
+}
+.result-card.show{opacity:1;transform:translateX(0)}
+.result-rank{
+  width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;flex-shrink:0;font-family:'Playfair Display',serif
+}
+.rank-hi{background:rgba(76,175,125,.15);color:var(--green);border:1px solid rgba(76,175,125,.3)}
+.rank-mid{background:rgba(201,168,76,.15);color:var(--accent);border:1px solid rgba(201,168,76,.3)}
+.rank-lo{background:rgba(232,165,76,.12);color:var(--amber);border:1px solid rgba(232,165,76,.3)}
+.result-thumb{width:44px;height:62px;object-fit:cover;border-radius:5px;background:var(--border);flex-shrink:0}
+.result-body{flex:1;min-width:0}
+.result-title{font-size:14px;font-weight:500;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.result-author{font-size:12px;color:var(--muted);margin-bottom:8px}
+.result-tags{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font-size:11px;padding:3px 8px;border-radius:20px;background:var(--border);color:var(--muted)}
+.tag.match{background:rgba(201,168,76,.15);color:var(--accent);border:1px solid rgba(201,168,76,.25)}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:280px;gap:8px}
+.empty-icon{font-size:32px;opacity:.3}
+.empty-text{font-size:13px;color:var(--muted);text-align:center;max-width:200px;line-height:1.5}
+
+/* Step log */
+.log-wrap{margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.log-head{padding:10px 16px;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.log-body{padding:10px 16px;font-family:monospace;font-size:12px;color:var(--muted);max-height:72px;overflow-y:auto;line-height:1.7}
+.log-body::-webkit-scrollbar{width:3px}
+.log-body::-webkit-scrollbar-thumb{background:var(--border)}
+.log-step{color:var(--text)}
+.log-visit{color:var(--accent)}
+
+/* spinner */
+.spinner{display:none;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-left:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">
+      <div class="logo-eyebrow">AI Mini Project &mdash; Search Algorithms</div>
+      <div class="logo-title">Smart <em>Library</em><br>Recommender</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px">
+      <div class="algo-pill">
+        <button class="active" id="btn-bfs" onclick="setAlgo('BFS')">BFS</button>
+        <button id="btn-dfs" onclick="setAlgo('DFS')">DFS</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:right;max-width:200px;line-height:1.6">
+        BFS explores neighbours first.<br>DFS dives deep before backtracking.
+      </div>
+    </div>
+  </header>
+
+  <div class="search-bar">
+    <div class="search-wrap">
+      <input id="book-input" placeholder="Search any book — e.g. Twisted Love, Dune, 1984…" autocomplete="off"/>
+      <div id="suggestions"></div>
+    </div>
+    <button class="find-btn" onclick="runSearch()">Find &rarr;</button>
+    <div class="spinner" id="spinner"></div>
+  </div>
+
+  <div class="status" id="status">Search a book to begin graph traversal.</div>
+
+  <div class="main">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-label">Graph Traversal</span>
+        <span class="panel-badge" id="visit-count"></span>
+      </div>
+      <canvas id="graph-canvas"></canvas>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--source-node)"></div>Source book</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--visited-node)"></div>Visited</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--current-node)"></div>Current</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3a3a45"></div>Unvisited</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-label">Recommendations</span>
+        <span class="panel-badge" id="rec-count"></span>
+      </div>
+      <div class="results-scroll" id="results-panel">
+        <div class="empty">
+          <div class="empty-icon">📚</div>
+          <div class="empty-text">Your recommendations will appear here as the graph traverses</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-wrap">
+    <div class="log-head">Traversal Log</div>
+    <div class="log-body" id="step-log">Waiting for search…</div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let algo = 'BFS';
+let selectedBook = null;   // { id, title, author, thumbnail, genre, categories }
+let fetchedBooks = [];     // books fetched from Google Books API
+let animating = false;
+let searchTimeout = null;
+
+// ─── Algorithm toggle ────────────────────────────────────────────────────────
+function setAlgo(a) {
+  algo = a;
+  document.getElementById('btn-bfs').classList.toggle('active', a === 'BFS');
+  document.getElementById('btn-dfs').classList.toggle('active', a === 'DFS');
+}
+
+// ─── Google Books API search ─────────────────────────────────────────────────
+async function searchBooks(query) {
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8&printType=books&langRestrict=en`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!data.items) return [];
+  return data.items.map(item => {
+    const info = item.volumeInfo;
+    return {
+      id: item.id,
+      title: info.title || 'Unknown',
+      author: (info.authors || ['Unknown'])[0],
+      thumbnail: (info.imageLinks || {}).thumbnail || '',
+      categories: (info.categories || ['Fiction']),
+      genre: ((info.categories || ['Fiction'])[0] || 'Fiction').split('/')[0].trim(),
+      description: info.description || '',
+      rating: info.averageRating || 0,
+    };
+  });
+}
+
+// Fetch related books for building the graph
+async function fetchRelated(book) {
+  const queries = [
+    `subject:${book.genre}`,
+    `inauthor:"${book.author}"`,
+    `${book.title.split(' ')[0]} similar fiction`
+  ];
+  const results = [];
+  for (const q of queries) {
+    try {
+      const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8&printType=books&langRestrict=en`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.items) {
+        data.items.forEach(item => {
+          const info = item.volumeInfo;
+          if (item.id !== book.id && !results.find(r => r.id === item.id)) {
+            results.push({
+              id: item.id,
+              title: info.title || 'Unknown',
+              author: (info.authors || ['Unknown'])[0],
+              thumbnail: (info.imageLinks || {}).thumbnail || '',
+              categories: (info.categories || ['Fiction']),
+              genre: ((info.categories || ['Fiction'])[0] || 'Fiction').split('/')[0].trim(),
+              description: info.description || '',
+              rating: info.averageRating || 0,
+            });
+          }
+        });
+      }
+    } catch(e) {}
+  }
+  return results.slice(0, 14);
+}
+
+// ─── Suggestion dropdown ─────────────────────────────────────────────────────
+const input = document.getElementById('book-input');
+const sugBox = document.getElementById('suggestions');
+
+input.addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  const q = input.value.trim();
+  if (q.length < 2) { sugBox.style.display = 'none'; return; }
+  searchTimeout = setTimeout(async () => {
+    const books = await searchBooks(q);
+    if (!books.length) { sugBox.style.display = 'none'; return; }
+    sugBox.innerHTML = books.map(b => `
+      <div class="sug-item" onclick="selectBook(${JSON.stringify(b).replace(/"/g,'&quot;')})">
+        ${b.thumbnail ? `<img class="sug-thumb" src="${b.thumbnail}" onerror="this.style.display='none'"/>` : '<div class="sug-thumb"></div>'}
+        <div class="sug-info">
+          <div class="sug-title">${b.title}</div>
+          <div class="sug-author">${b.author} &middot; ${b.genre}</div>
+        </div>
+      </div>`).join('');
+    sugBox.style.display = 'block';
+  }, 350);
+});
+
+document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) sugBox.style.display = 'none'; });
+
+function selectBook(b) {
+  selectedBook = b;
+  input.value = b.title;
+  sugBox.style.display = 'none';
+}
+
+// ─── Edge weight between two books ──────────────────────────────────────────
+function edgeWeight(a, b) {
+  let score = 0;
+  if (a.genre === b.genre) score += 3;
+  if (a.author === b.author) score += 4;
+  const sharedCats = (a.categories || []).filter(c => (b.categories || []).includes(c));
+  score += sharedCats.length * 2;
+  if (a.rating && b.rating && Math.abs(a.rating - b.rating) < 1) score += 1;
+  return score;
+}
+
+// ─── Graph canvas ────────────────────────────────────────────────────────────
+const canvas = document.getElementById('graph-canvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const r = canvas.getBoundingClientRect();
+  canvas.width = r.width * devicePixelRatio;
+  canvas.height = r.height * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+
+function getPositions(allBooks, sourceId) {
+  const r = canvas.getBoundingClientRect();
+  const W = r.width, H = r.height;
+  const cx = W / 2, cy = H / 2;
+  const positions = {};
+  const others = allBooks.filter(b => b.id !== sourceId);
+  const R = Math.min(W, H) * 0.36;
+  positions[sourceId] = { x: cx, y: cy };
+  others.forEach((b, i) => {
+    const angle = (2 * Math.PI * i / others.length) - Math.PI / 2;
+    positions[b.id] = { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) };
+  });
+  return positions;
+}
+
+function drawGraph(allBooks, visitedSet, currentId, positions, adjMap) {
+  const r = canvas.getBoundingClientRect();
+  ctx.clearRect(0, 0, r.width, r.height);
+
+  // Draw edges
+  allBooks.forEach(a => {
+    (adjMap[a.id] || []).forEach(({ id: bid, w }) => {
+      const b = allBooks.find(x => x.id === bid);
+      if (!b || !positions[a.id] || !positions[bid]) return;
+      if (a.id > bid) return; // draw once
+      const pa = positions[a.id], pb = positions[bid];
+      const bothVisited = visitedSet.has(a.id) && visitedSet.has(bid);
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
+      ctx.strokeStyle = bothVisited ? 'rgba(201,168,76,0.35)' : 'rgba(60,60,70,0.6)';
+      ctx.lineWidth = bothVisited ? 1.5 : 0.6;
+      ctx.stroke();
+    });
+  });
+
+  // Draw nodes
+  allBooks.forEach(b => {
+    const p = positions[b.id];
+    if (!p) return;
+    const isSource = b.id === selectedBook?.id;
+    const isCurrent = b.id === currentId;
+    const isVisited = visitedSet.has(b.id);
+    const radius = isSource ? 18 : 12;
+
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, 2 * Math.PI);
+    let fill = '#2a2a36';
+    if (isSource) fill = '#4caf7d';
+    else if (isCurrent) fill = '#e87c4c';
+    else if (isVisited) fill = '#c9a84c';
+    ctx.fillStyle = fill;
+    ctx.fill();
+
+    if (isSource || isCurrent) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius + 3, 0, 2 * Math.PI);
+      ctx.strokeStyle = fill + '55'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+
+    const label = b.title.length > 12 ? b.title.slice(0, 11) + '…' : b.title;
+    ctx.fillStyle = isVisited || isSource ? '#e8e6df' : '#7a7870';
+    ctx.font = `${isSource ? '500 ' : ''}10px 'DM Sans', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(label, p.x, p.y + radius + 13);
+  });
+}
+
+// ─── Main search + traversal ─────────────────────────────────────────────────
+async function runSearch() {
+  if (animating) return;
+  if (!selectedBook) { setStatus('Please select a book from the dropdown first.'); return; }
+  animating = true;
+
+  const logEl = document.getElementById('step-log');
+  const rPanel = document.getElementById('results-panel');
+  const spinner = document.getElementById('spinner');
+  spinner.style.display = 'block';
+  rPanel.innerHTML = '<div class="empty"><div class="empty-text">Fetching related books from Google Books…</div></div>';
+  setStatus(`Fetching books related to "${selectedBook.title}"…`);
+  logEl.textContent = '';
+
+  let allBooks;
+  try {
+    const related = await fetchRelated(selectedBook);
+    allBooks = [selectedBook, ...related];
+    fetchedBooks = allBooks;
+  } catch (e) {
+    setStatus('Network error. Check your connection.'); animating = false; spinner.style.display='none'; return;
+  }
+
+  spinner.style.display = 'none';
+
+  // Build adjacency map
+  const adjMap = {};
+  allBooks.forEach(a => { adjMap[a.id] = []; });
+  for (let i = 0; i < allBooks.length; i++) {
+    for (let j = i + 1; j < allBooks.length; j++) {
+      const w = edgeWeight(allBooks[i], allBooks[j]);
+      if (w >= 1) {
+        adjMap[allBooks[i].id].push({ id: allBooks[j].id, w });
+        adjMap[allBooks[j].id].push({ id: allBooks[i].id, w });
+      }
+    }
+  }
+
+  // Compute scores for recommendations (neighbours of source)
+  const scores = {};
+  (adjMap[selectedBook.id] || []).forEach(({ id, w }) => { scores[id] = (scores[id] || 0) + w; });
+
+  resizeCanvas();
+  const positions = getPositions(allBooks, selectedBook.id);
+
+  // BFS or DFS
+  const visitedOrder = [];
+  const visited = new Set();
+  const steps = [];
+
+  if (algo === 'BFS') {
+    const queue = [selectedBook.id]; visited.add(selectedBook.id);
+    while (queue.length) {
+      const cur = queue.shift();
+      visitedOrder.push(cur); steps.push({ visited: new Set(visited), cur });
+      (adjMap[cur] || []).sort((a, b) => b.w - a.w).forEach(({ id }) => {
+        if (!visited.has(id)) { visited.add(id); queue.push(id); }
+      });
+    }
+  } else {
+    const stack = [selectedBook.id];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (visited.has(cur)) continue;
+      visited.add(cur); visitedOrder.push(cur); steps.push({ visited: new Set(visited), cur });
+      (adjMap[cur] || []).sort((a, b) => a.w - b.w).forEach(({ id }) => {
+        if (!visited.has(id)) stack.push(id);
+      });
+    }
+  }
+
+  rPanel.innerHTML = '';
+  let recCount = 0;
+  drawGraph(allBooks, new Set(), null, positions, adjMap);
+
+  for (let i = 0; i < steps.length; i++) {
+    const { visited: vs, cur } = steps[i];
+    drawGraph(allBooks, vs, cur, positions, adjMap);
+    document.getElementById('visit-count').textContent = `${i + 1}/${steps.length} nodes`;
+    setStatus(`[${algo}] Visiting: "${allBooks.find(b => b.id === cur)?.title || cur}"`);
+    addLog(logEl, `[${algo} step ${i + 1}] → ${allBooks.find(b => b.id === cur)?.title || cur}`);
+
+    if (cur !== selectedBook.id && scores[cur]) {
+      const book = allBooks.find(b => b.id === cur);
+      if (book) {
+        recCount++;
+        document.getElementById('rec-count').textContent = `${recCount} found`;
+        const sc = scores[cur];
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        const rankCls = sc >= 6 ? 'rank-hi' : sc >= 4 ? 'rank-mid' : 'rank-lo';
+        const why = [];
+        if (book.genre === selectedBook.genre) why.push(book.genre);
+        if (book.author === selectedBook.author) why.push('Same author');
+        const shared = (book.categories || []).filter(c => (selectedBook.categories || []).includes(c));
+        shared.slice(0, 2).forEach(c => why.push(c.split('/')[0].trim()));
+        card.innerHTML = `
+          <div class="result-rank ${rankCls}">${sc}</div>
+          ${book.thumbnail ? `<img class="result-thumb" src="${book.thumbnail}" onerror="this.style.display='none'"/>` : ''}
+          <div class="result-body">
+            <div class="result-title">${book.title}</div>
+            <div class="result-author">${book.author}</div>
+            <div class="result-tags">
+              ${why.slice(0, 3).map(t => `<span class="tag match">${t}</span>`).join('')}
+            </div>
+          </div>`;
+        rPanel.appendChild(card);
+        setTimeout(() => card.classList.add('show'), 30);
+      }
+    }
+    await sleep(algo === 'BFS' ? 420 : 340);
+  }
+
+  drawGraph(allBooks, new Set(visitedOrder), null, positions, adjMap);
+  setStatus(`Done. Visited ${visitedOrder.length} books via ${algo}. Found ${recCount} recommendations.`);
+  addLog(logEl, `✓ Traversal complete — ${recCount} recommendations generated.`);
+  animating = false;
+}
+
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+function addLog(el, msg) {
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Init canvas
+resizeCanvas();
+drawGraph([], new Set(), null, {}, {});
+window.addEventListener('resize', () => { if (!animating) { resizeCanvas(); drawGraph(fetchedBooks, new Set(), null, {}, {}); } });
+</script>
+</body>
+</html>
