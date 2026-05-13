@@ -220,59 +220,124 @@ function setAlgo(a) {
   document.getElementById('btn-dfs').classList.toggle('active', a === 'DFS');
 }
 
-// ─── Google Books API search ─────────────────────────────────────────────────
-async function searchBooks(query) {
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8&printType=books&langRestrict=en`;
+// ─── Hardcoded book dataset (fallback when API unavailable) ──────────────────
+const BOOK_DB = [
+  {id:'b01',title:'Twisted Love',author:'Ana Huang',thumbnail:'',categories:['Romance','New Adult'],genre:'Romance',rating:4.2},
+  {id:'b02',title:'Twisted Games',author:'Ana Huang',thumbnail:'',categories:['Romance','New Adult'],genre:'Romance',rating:4.1},
+  {id:'b03',title:'Twisted Hate',author:'Ana Huang',thumbnail:'',categories:['Romance','New Adult'],genre:'Romance',rating:4.0},
+  {id:'b04',title:'Twisted Lies',author:'Ana Huang',thumbnail:'',categories:['Romance','New Adult'],genre:'Romance',rating:4.3},
+  {id:'b05',title:'It Ends with Us',author:'Colleen Hoover',thumbnail:'',categories:['Romance','Fiction'],genre:'Romance',rating:4.4},
+  {id:'b06',title:'Ugly Love',author:'Colleen Hoover',thumbnail:'',categories:['Romance','Fiction'],genre:'Romance',rating:4.2},
+  {id:'b07',title:'November 9',author:'Colleen Hoover',thumbnail:'',categories:['Romance','Fiction'],genre:'Romance',rating:4.3},
+  {id:'b08',title:'The Hating Game',author:'Sally Thorne',thumbnail:'',categories:['Romance','Fiction'],genre:'Romance',rating:4.1},
+  {id:'b09',title:'People We Meet on Vacation',author:'Emily Henry',thumbnail:'',categories:['Romance','Fiction'],genre:'Romance',rating:4.2},
+  {id:'b10',title:'Beach Read',author:'Emily Henry',thumbnail:'',categories:['Romance','Fiction'],genre:'Romance',rating:4.0},
+  {id:'b11',title:'Dune',author:'Frank Herbert',thumbnail:'',categories:['Science Fiction'],genre:'Science Fiction',rating:4.5},
+  {id:'b12',title:'Foundation',author:'Isaac Asimov',thumbnail:'',categories:['Science Fiction'],genre:'Science Fiction',rating:4.4},
+  {id:'b13',title:"Ender's Game",author:'Orson Scott Card',thumbnail:'',categories:['Science Fiction'],genre:'Science Fiction',rating:4.3},
+  {id:'b14',title:'The Martian',author:'Andy Weir',thumbnail:'',categories:['Science Fiction'],genre:'Science Fiction',rating:4.4},
+  {id:'b15',title:'Project Hail Mary',author:'Andy Weir',thumbnail:'',categories:['Science Fiction'],genre:'Science Fiction',rating:4.6},
+  {id:'b16',title:'1984',author:'George Orwell',thumbnail:'',categories:['Dystopia','Classic Fiction'],genre:'Dystopia',rating:4.5},
+  {id:'b17',title:'Brave New World',author:'Aldous Huxley',thumbnail:'',categories:['Dystopia','Classic Fiction'],genre:'Dystopia',rating:4.1},
+  {id:'b18',title:"The Handmaid's Tale",author:'Margaret Atwood',thumbnail:'',categories:['Dystopia','Fiction'],genre:'Dystopia',rating:4.2},
+  {id:'b19',title:'Fahrenheit 451',author:'Ray Bradbury',thumbnail:'',categories:['Dystopia','Classic Fiction'],genre:'Dystopia',rating:4.0},
+  {id:'b20',title:'The Lord of the Rings',author:'J.R.R. Tolkien',thumbnail:'',categories:['Fantasy'],genre:'Fantasy',rating:4.6},
+  {id:'b21',title:'The Name of the Wind',author:'Patrick Rothfuss',thumbnail:'',categories:['Fantasy'],genre:'Fantasy',rating:4.5},
+  {id:'b22',title:'Mistborn',author:'Brandon Sanderson',thumbnail:'',categories:['Fantasy'],genre:'Fantasy',rating:4.5},
+  {id:'b23',title:'The Way of Kings',author:'Brandon Sanderson',thumbnail:'',categories:['Fantasy'],genre:'Fantasy',rating:4.6},
+  {id:'b24',title:'A Court of Thorns and Roses',author:'Sarah J. Maas',thumbnail:'',categories:['Fantasy','Romance'],genre:'Fantasy',rating:4.2},
+  {id:'b25',title:'A Court of Mist and Fury',author:'Sarah J. Maas',thumbnail:'',categories:['Fantasy','Romance'],genre:'Fantasy',rating:4.6},
+  {id:'b26',title:'Throne of Glass',author:'Sarah J. Maas',thumbnail:'',categories:['Fantasy','Romance'],genre:'Fantasy',rating:4.2},
+  {id:'b27',title:'The Cruel Prince',author:'Holly Black',thumbnail:'',categories:['Fantasy','Romance'],genre:'Fantasy',rating:4.1},
+  {id:'b28',title:'From Blood and Ash',author:'Jennifer L. Armentrout',thumbnail:'',categories:['Fantasy','Romance'],genre:'Fantasy',rating:4.4},
+  {id:'b29',title:'Sapiens',author:'Yuval Noah Harari',thumbnail:'',categories:['Non-Fiction','History'],genre:'Non-Fiction',rating:4.4},
+  {id:'b30',title:'Thinking Fast and Slow',author:'Daniel Kahneman',thumbnail:'',categories:['Non-Fiction','Psychology'],genre:'Non-Fiction',rating:4.3},
+  {id:'b31',title:'Atomic Habits',author:'James Clear',thumbnail:'',categories:['Non-Fiction','Self-Help'],genre:'Non-Fiction',rating:4.5},
+  {id:'b32',title:'Crime and Punishment',author:'Fyodor Dostoevsky',thumbnail:'',categories:['Classic Fiction'],genre:'Classic',rating:4.3},
+  {id:'b33',title:'The Great Gatsby',author:'F. Scott Fitzgerald',thumbnail:'',categories:['Classic Fiction'],genre:'Classic',rating:3.9},
+  {id:'b34',title:'Pride and Prejudice',author:'Jane Austen',thumbnail:'',categories:['Classic Fiction','Romance'],genre:'Classic',rating:4.5},
+  {id:'b35',title:'Gone Girl',author:'Gillian Flynn',thumbnail:'',categories:['Thriller','Mystery'],genre:'Thriller',rating:4.0},
+  {id:'b36',title:'The Girl on the Train',author:'Paula Hawkins',thumbnail:'',categories:['Thriller','Mystery'],genre:'Thriller',rating:3.9},
+  {id:'b37',title:'The Silent Patient',author:'Alex Michaelides',thumbnail:'',categories:['Thriller','Mystery'],genre:'Thriller',rating:4.2},
+  {id:'b38',title:'Verity',author:'Colleen Hoover',thumbnail:'',categories:['Thriller','Romance'],genre:'Thriller',rating:4.3},
+  {id:'b39',title:'The Seven Husbands of Evelyn Hugo',author:'Taylor Jenkins Reid',thumbnail:'',categories:['Romance','Historical Fiction'],genre:'Romance',rating:4.5},
+  {id:'b40',title:'Daisy Jones and the Six',author:'Taylor Jenkins Reid',thumbnail:'',categories:['Historical Fiction','Romance'],genre:'Historical Fiction',rating:4.3},
+];
+
+// ─── Search & fetch with API-first, fallback to local DB ─────────────────────
+let apiAvailable = true;
+
+async function tryGoogleBooksAPI(url) {
+  if (!apiAvailable) throw new Error('API disabled');
   const res = await fetch(url);
-  const data = await res.json();
-  if (!data.items) return [];
-  return data.items.map(item => {
-    const info = item.volumeInfo;
-    return {
-      id: item.id,
-      title: info.title || 'Unknown',
-      author: (info.authors || ['Unknown'])[0],
-      thumbnail: (info.imageLinks || {}).thumbnail || '',
-      categories: (info.categories || ['Fiction']),
-      genre: ((info.categories || ['Fiction'])[0] || 'Fiction').split('/')[0].trim(),
-      description: info.description || '',
-      rating: info.averageRating || 0,
-    };
-  });
+  if (!res.ok) throw new Error('API error');
+  return res.json();
 }
 
-// Fetch related books for building the graph
+function parseAPIItem(item) {
+  const info = item.volumeInfo;
+  return {
+    id: item.id,
+    title: info.title || 'Unknown',
+    author: (info.authors || ['Unknown'])[0],
+    thumbnail: (info.imageLinks || {}).thumbnail || '',
+    categories: (info.categories || ['Fiction']),
+    genre: ((info.categories || ['Fiction'])[0] || 'Fiction').split('/')[0].trim(),
+    description: info.description || '',
+    rating: info.averageRating || 0,
+  };
+}
+
+async function searchBooks(query) {
+  // Try API first
+  try {
+    const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8&printType=books&langRestrict=en`;
+    const data = await tryGoogleBooksAPI(url);
+    if (data.items && data.items.length > 0) return data.items.map(parseAPIItem);
+  } catch(e) { apiAvailable = false; }
+
+  // Fallback: search local DB
+  const q = query.toLowerCase();
+  return BOOK_DB.filter(b =>
+    b.title.toLowerCase().includes(q) ||
+    b.author.toLowerCase().includes(q) ||
+    b.genre.toLowerCase().includes(q) ||
+    (b.categories || []).some(c => c.toLowerCase().includes(q))
+  ).slice(0, 8);
+}
+
 async function fetchRelated(book) {
-  const queries = [
-    `subject:${book.genre}`,
-    `inauthor:"${book.author}"`,
-    `${book.title.split(' ')[0]} similar fiction`
-  ];
   const results = [];
-  for (const q of queries) {
-    try {
-      const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8&printType=books&langRestrict=en`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.items) {
-        data.items.forEach(item => {
-          const info = item.volumeInfo;
-          if (item.id !== book.id && !results.find(r => r.id === item.id)) {
-            results.push({
-              id: item.id,
-              title: info.title || 'Unknown',
-              author: (info.authors || ['Unknown'])[0],
-              thumbnail: (info.imageLinks || {}).thumbnail || '',
-              categories: (info.categories || ['Fiction']),
-              genre: ((info.categories || ['Fiction'])[0] || 'Fiction').split('/')[0].trim(),
-              description: info.description || '',
-              rating: info.averageRating || 0,
-            });
-          }
-        });
-      }
-    } catch(e) {}
+
+  // Try API first
+  if (apiAvailable) {
+    const queries = [
+      `subject:${book.genre}`,
+      `inauthor:"${book.author}"`,
+    ];
+    for (const q of queries) {
+      try {
+        const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8&printType=books&langRestrict=en`;
+        const data = await tryGoogleBooksAPI(url);
+        if (data.items) {
+          data.items.forEach(item => {
+            if (item.id !== book.id && !results.find(r => r.id === item.id)) {
+              results.push(parseAPIItem(item));
+            }
+          });
+        }
+      } catch(e) { apiAvailable = false; break; }
+    }
+    if (results.length >= 6) return results.slice(0, 14);
   }
+
+  // Fallback: use local DB — match by genre, author, or category
+  const local = BOOK_DB.filter(b => b.id !== book.id && (
+    b.genre === book.genre ||
+    b.author === book.author ||
+    (b.categories || []).some(c => (book.categories || []).includes(c))
+  ));
+  local.forEach(b => { if (!results.find(r => r.id === b.id)) results.push(b); });
   return results.slice(0, 14);
 }
 
